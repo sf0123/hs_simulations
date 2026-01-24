@@ -61,10 +61,14 @@ eval_urn vec part =
 	in fracDiv greens part
 
 simulateUrnIO args = do
+    let amount = ensemble args
+    replicateM amount (simulateUrnIO' args)
+
+simulateUrnIO' args = do
     let turns = totalTurns args
     randIndeces <- mapM (\i -> randomRIO(0,i)) [1..turns]
     res <- exercise (modify randIndeces) turns
-    return $ zip [1..] res
+    return res
     -- print =<< exercise modify n
 
 -- n: ensemble size (n parallel experiments)
@@ -126,4 +130,4 @@ main = do
 		    dat <- simulateUrnIO args 
 		    print dat
 	Gamble -> do
-			simulateGambleIOgraphic args
+	            simulateGambleIOgraphic args

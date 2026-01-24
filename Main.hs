@@ -1,19 +1,21 @@
 import System.Console.CmdArgs
 import System.Random
+import System.IO
 import Control.Monad               (replicateM, replicateM_, forM_)
-import Data.List (intercalate)
+import Data.List (intercalate, zip)
 import Data.STRef
 import Data.Function 
 import           Data.Vector.Unboxed (freeze)
 import qualified Data.Vector.Unboxed as IV
 import qualified Data.Vector.Unboxed.Mutable as V
 import           System.Random       (randomRIO)
-import Debug.Trace
-debug = flip trace
+
+data SimMode = Urn | Gamble deriving (Data, Typeable, Show, Eq)
 
 data MyApp = MyApp
     { 
       output   :: FilePath
+    , mode     :: SimMode
     , ensemble :: Int
     , totalTurns    :: Int
     , bankPart :: Double
@@ -21,39 +23,27 @@ data MyApp = MyApp
     , onLose   :: Double
     } deriving (Data, Typeable, Show, Eq)
 
--- todo - what those operators mean?
 myApp :: MyApp
 myApp = MyApp
     { 
       output = "output.txt" &= typ "FILE" &= help "Output file"
-    , ensemble = 1 &= help "amount of independent simulations"
-    , totalTurns = 100 &= help "Number of turns"
-    , bankPart = 1.0 &= help "part of bank to be at stake at each turn"
-    , onWin = 0.5 &= help "part of stake to add"
-    , onLose = 0.4 &= help "part of stake to subtract"
+      ,mode = Gamble 
+    , ensemble = 1 &= help "amount of independent simulations" &= name "ensemble" 
+    , totalTurns = 100 &= help "Number of turns" &= name "totalTurns"
+    , bankPart = 1.0 &= help "part of bank to be at stake at each turn" &= name "bankPart" 
+    , onWin = 0.5 &= help "part of stake to add" &= name "onWin" 
+    , onLose = 0.4 &= help "part of stake to subtract" &= name "onLose" 
     } &= summary "simulation for Polya's urn and gambling" &= help "A useful application" &= program "myapp"
-
 
 fracDiv = (/) `on` fromIntegral
 
-modify v i n
-	| i == n = return v
-	| otherwise = do
-		sample <- V.read v =<< randomRIO (0, i)
-		V.write v i sample
-		modify v (i+1) n
-
 -- take list of random integers
-modify'' indeces v i n 
+modify indeces v i n 
 	| i == n = return v
 	| otherwise = do
 		sample <- V.read v (head indeces)
 		V.write v i sample
-		modify'' (tail indeces) v (i+1) n
-
--- modify' - for exercising: how to write it in imperative fashion? using forM and cycling..
--- ??
-	
+		modify (tail indeces) v (i+1) n
 
 -- poya's urn
 exercise mod n = do
@@ -62,24 +52,19 @@ exercise mod n = do
     V.write vector 1 2
     mod vector 2 n
     ivector <- freeze vector 
-    return ivector
+    return $ IV.toList ivector
     -- let greens = IV.length $ IV.filter (\i-> i== 1) ivector
     -- return $ fracDiv greens n
     --
-eva_lurn vec part =
+eval_urn vec part =
 	let greens = IV.length $ IV.filter (\i-> i== 1) (IV.take part vec)
 	in fracDiv greens part
 
-simulateUrnIO n = do
-    let n = 30000
-
-    -- randIndeces <- mapM (\i -> randomRIO(0,i)) [1..n]
-    -- print =<< exercise (modify'' randIndeces) n
-
-    
-    res <- exercise modify n
-    forM_  [x*100 | x <- [1..30] ] (\i -> do 
-    	print $ (show i) ++ ": " ++ (show $ eva_lurn res i))
+simulateUrnIO args = do
+    let turns = totalTurns args
+    randIndeces <- mapM (\i -> randomRIO(0,i)) [1..turns]
+    res <- exercise (modify randIndeces) turns
+    return $ zip [1..] res
     -- print =<< exercise modify n
 
 -- n: ensemble size (n parallel experiments)
@@ -101,7 +86,14 @@ simulateGambleIOgraphic cmdargs = let
 						n = ensemble cmdargs
 						turns = totalTurns cmdargs
 					    in 
-						replicateM n ( simulateGambleIOgraph cmdargs turns [] 1 )
+					    do
+						    let turns = totalTurns cmdargs
+						    let amount = ensemble cmdargs 
+						    raw_data <- replicateM n ( simulateGambleIOgraph cmdargs turns [] 1 )
+						    let data1 = transformLists $ (map fromIntegral [1 .. turns]) : raw_data
+						    putStrLn $ "turns,"  ++ (generateLinesHeader amount)
+						    mapM_ (putStrLn . intercalate ", " . map show) data1
+
 
 simulateGambleIOgraph cmdargs turns accum bank 
 	| (turns == 0) = return $ reverse (bank:accum)
@@ -117,7 +109,6 @@ simulateGambleIOgraph cmdargs turns accum bank
 mean :: [Int] -> Double
 mean xs = fromIntegral (sum xs) / fromIntegral (length xs)
 
-
 -- takes list of N sequences of L length, transforms to list of L lists with N elems (zips)
 transformLists ([]:xs) = []
 transformLists xs = (head <$> xs) : transformLists (tail <$> xs)
@@ -125,32 +116,14 @@ transformLists xs = (head <$> xs) : transformLists (tail <$> xs)
 generateLinesHeader :: Int -> String
 generateLinesHeader n = intercalate ", " [ "line" ++ show i | i <- [1..n] ]
 
--- main' :: IO ()
--- main' = do
---     let turns = 500
---     let ensemble = 5 
---     let part = 1
---     let bank = 1
---     -- simres <- simulateGambleIOsingle turns 1 part
---     -- print $ simres
--- 
---     -- simres' <- simulateGambleIO 3 turns 1 part
---     -- print $ simres'
---     -- print $(sum simres'/fromIntegral(ensemble))
---     simres'' <- simulateGambleIOgraphic 5 turns 1 part
---     let data1 = transformLists $ [1..turns] : simres''
---     putStrLn $ "turns,"  ++ (generateLinesHeader ensemble)
---     mapM_ (putStrLn . intercalate ", " . map show) data1
-
-    -- simulateUrnIO 30000
 main :: IO ()
 main = do
     args <- cmdArgs myApp
-    putStrLn $ "Arguments: " ++ show args
-    -- Your application logic here
-    simres'' <- simulateGambleIOgraphic args 
-    let turns = totalTurns args
-    let amount = ensemble args 
-    let data1 = transformLists $ (map fromIntegral [1 .. turns]) : simres''
-    putStrLn $ "turns,"  ++ (generateLinesHeader amount)
-    mapM_ (putStrLn . intercalate ", " . map show) data1
+    hPutStrLn stderr $ "Arguments: " ++ show args
+    let gamemode = mode args
+    case gamemode of
+    	Urn ->    do
+		    dat <- simulateUrnIO args 
+		    print dat
+	Gamble -> do
+			simulateGambleIOgraphic args

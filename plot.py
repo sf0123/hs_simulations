@@ -3,11 +3,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Read the data
-df = pd.read_csv(sys.argv[1])
+print(sys.argv)
+if len(sys.argv) > 1:
+    src = sys.argv[1]
+else:
+    src = sys.stdin
+df = pd.read_csv(src)
 
 # Basic plot with all lines
 plt.figure(figsize=(10, 6))
-plt.ylim(0, 10)           # Fixed range from 0 to 10
+# plt.ylim(0, 10)           # Fixed range from 0 to 10
 
 for column in df.columns[1:]:  # Skip 'turns' column
     plt.plot(df['turns'], df[column], label=column, marker='o')

@@ -1,7 +1,8 @@
 import System.Console.CmdArgs
 import System.Random
 import System.IO
-import Control.Monad               (replicateM, replicateM_, forM_)
+import Control.Monad               (replicateM, replicateM_, forM_, foldM)
+import Control.Monad.State (put, get, runState)
 import Data.List (intercalate, zip)
 import Data.STRef
 import Data.Function 
@@ -33,7 +34,7 @@ myApp = MyApp
     , bankPart = 1.0 &= help "part of bank to be at stake at each turn" &= name "bankPart" 
     , onWin = 0.5 &= help "part of stake to add" &= name "onWin" 
     , onLose = 0.4 &= help "part of stake to subtract" &= name "onLose" 
-    } &= summary "simulation for Polya's urn and gambling" &= help "A useful application" &= program "myapp"
+    } &= summary "simulation for Polya's urn and gambling" &= help "app for simulation of some ergodic and non-ergodic processes  " &= program "simulate"
 
 fracDiv = (/) `on` fromIntegral
 
@@ -55,9 +56,15 @@ exercise mod n = do
     -- let greens = IV.length $ IV.filter (\i-> i== 1) ivector
     -- return $ fracDiv greens n
     --
-eval_urn vec part =
-	let greens = IV.length $ IV.filter (\i-> i== 1) (IV.take part vec)
-	in fracDiv greens part
+
+func1 rest el  = do
+	(accum,len) <- get 
+	let total = if el == 1 then accum+1 else accum
+	let distr = total/len :: Double 
+	put(total,len+1) 
+	return $ distr:rest
+
+modifyToDistr a = reverse $ fst $ runState (foldM func1 [] a) (0,1)
 
 -- todo - aggregate green/amount for each cell
 simulateUrnIO args = do
@@ -66,14 +73,14 @@ simulateUrnIO args = do
     let fname = output args
     res <- replicateM amount (simulateUrnIO' args)
     putStrLn $ "turns," ++ (generateLinesHeader amount)
-    mapM_ (putStrLn . intercalate ", " . map show) (transformLists $ [1..turns]: res)
+    mapM_ (putStrLn . intercalate ", " . map show) (transformLists $ (fromIntegral <$> [1..turns]): res)
 
 
 simulateUrnIO' args = do
     let turns = totalTurns args
     randIndeces <- mapM (\i -> randomRIO(0,i)) [1..turns]
     res <- exercise (modify randIndeces) turns
-    return res
+    return $ modifyToDistr res
 
 simulateGambleIO n turns bank part = replicateM n ( simulateGambleIOsingle turns bank part)
 

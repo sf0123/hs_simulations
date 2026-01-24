@@ -1,7 +1,7 @@
+import System.Console.CmdArgs
 import System.Random
-
-
-import           Control.Monad               (replicateM, replicateM_, forM_)
+import Control.Monad               (replicateM, replicateM_, forM_)
+import Data.List (intercalate)
 import Data.STRef
 import Data.Function 
 import           Data.Vector.Unboxed (freeze)
@@ -10,6 +10,29 @@ import qualified Data.Vector.Unboxed.Mutable as V
 import           System.Random       (randomRIO)
 import Debug.Trace
 debug = flip trace
+
+data MyApp = MyApp
+    { 
+      output   :: FilePath
+    , ensemble :: Int
+    , totalTurns    :: Int
+    , bankPart :: Double
+    , onWin    :: Double
+    , onLose   :: Double
+    } deriving (Data, Typeable, Show, Eq)
+
+-- todo - what those operators mean?
+myApp :: MyApp
+myApp = MyApp
+    { 
+      output = "output.txt" &= typ "FILE" &= help "Output file"
+    , ensemble = 1 &= help "amount of independent simulations"
+    , totalTurns = 100 &= help "Number of turns"
+    , bankPart = 1.0 &= help "part of bank to be at stake at each turn"
+    , onWin = 0.5 &= help "part of stake to add"
+    , onLose = 0.4 &= help "part of stake to subtract"
+    } &= summary "simulation for Polya's urn and gambling" &= help "A useful application" &= program "myapp"
+
 
 fracDiv = (/) `on` fromIntegral
 
@@ -74,33 +97,60 @@ simulateGambleIOsingle turns bank part
 				| coin == 0 -> simulateGambleIOsingle (turns-1) (bank-(bank*part*0.4)) part 
 				| otherwise -> simulateGambleIOsingle (turns-1) (bank+(bank*part*0.5)) part
 
-simulateGambleIOgraphic n turns part bank = replicateM n ( simulateGambleIOgraph turns part [] bank )
+simulateGambleIOgraphic cmdargs = let 
+						n = ensemble cmdargs
+						turns = totalTurns cmdargs
+					    in 
+						replicateM n ( simulateGambleIOgraph cmdargs turns [] 1 )
 
-simulateGambleIOgraph turns part accum bank 
+simulateGambleIOgraph cmdargs turns accum bank 
 	| (turns == 0) = return $ reverse (bank:accum)
 	| otherwise = do
 		coin <- randomRIO(0,1) :: IO Int
+		let onwin = onWin cmdargs
+		let onlose = onLose cmdargs
+		let part = bankPart cmdargs
 		case () of _
-				| coin == 0 -> simulateGambleIOgraph (turns-1) part (bank:accum) (bank-(bank*part*0.4)) 
-				| otherwise -> simulateGambleIOgraph (turns-1) part (bank:accum) (bank+(bank*part*0.5)) 
+				| coin == 0 -> computeForward (bank-(bank*part*onlose)) 
+				| otherwise -> computeForward (bank+(bank*part*onwin)) 
+				where computeForward = simulateGambleIOgraph cmdargs (turns-1) (bank:accum)
 mean :: [Int] -> Double
 mean xs = fromIntegral (sum xs) / fromIntegral (length xs)
 
 
+-- takes list of N sequences of L length, transforms to list of L lists with N elems (zips)
+transformLists ([]:xs) = []
+transformLists xs = (head <$> xs) : transformLists (tail <$> xs)
 
+generateLinesHeader :: Int -> String
+generateLinesHeader n = intercalate ", " [ "line" ++ show i | i <- [1..n] ]
 
-
-main :: IO ()
-main = do
-    let turns = 350
-    let ensemble = 3500
-    let part = 1
-    let bank = 1
-    -- simres <- simulateGambleIOsingle turns 1 part
-    -- print $ simres
-
-    simres' <- simulateGambleIO ensemble turns 1 part
-    -- print $ simres'
-    print $(sum simres'/fromIntegral(ensemble))
+-- main' :: IO ()
+-- main' = do
+--     let turns = 500
+--     let ensemble = 5 
+--     let part = 1
+--     let bank = 1
+--     -- simres <- simulateGambleIOsingle turns 1 part
+--     -- print $ simres
+-- 
+--     -- simres' <- simulateGambleIO 3 turns 1 part
+--     -- print $ simres'
+--     -- print $(sum simres'/fromIntegral(ensemble))
+--     simres'' <- simulateGambleIOgraphic 5 turns 1 part
+--     let data1 = transformLists $ [1..turns] : simres''
+--     putStrLn $ "turns,"  ++ (generateLinesHeader ensemble)
+--     mapM_ (putStrLn . intercalate ", " . map show) data1
 
     -- simulateUrnIO 30000
+main :: IO ()
+main = do
+    args <- cmdArgs myApp
+    putStrLn $ "Arguments: " ++ show args
+    -- Your application logic here
+    simres'' <- simulateGambleIOgraphic args 
+    let turns = totalTurns args
+    let amount = ensemble args 
+    let data1 = transformLists $ (map fromIntegral [1 .. turns]) : simres''
+    putStrLn $ "turns,"  ++ (generateLinesHeader amount)
+    mapM_ (putStrLn . intercalate ", " . map show) data1

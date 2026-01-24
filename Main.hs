@@ -26,7 +26,7 @@ data MyApp = MyApp
 myApp :: MyApp
 myApp = MyApp
     { 
-      output = "output.txt" &= typ "FILE" &= help "Output file"
+      output = "stdout" &= typ "FILE" &= help "Output file name, or 'stdout'" &= name "output"
       ,mode = Gamble 
     , ensemble = 1 &= help "amount of independent simulations" &= name "ensemble" 
     , totalTurns = 100 &= help "Number of turns" &= name "totalTurns"
@@ -37,9 +37,8 @@ myApp = MyApp
 
 fracDiv = (/) `on` fromIntegral
 
--- take list of random integers
 modify indeces v i n 
-	| i == n = return v
+        | i == n = return v
 	| otherwise = do
 		sample <- V.read v (head indeces)
 		V.write v i sample
@@ -60,22 +59,22 @@ eval_urn vec part =
 	let greens = IV.length $ IV.filter (\i-> i== 1) (IV.take part vec)
 	in fracDiv greens part
 
+-- todo - aggregate green/amount for each cell
 simulateUrnIO args = do
     let amount = ensemble args
-    replicateM amount (simulateUrnIO' args)
+    let turns = totalTurns args
+    let fname = output args
+    res <- replicateM amount (simulateUrnIO' args)
+    putStrLn $ "turns," ++ (generateLinesHeader amount)
+    mapM_ (putStrLn . intercalate ", " . map show) (transformLists $ [1..turns]: res)
+
 
 simulateUrnIO' args = do
     let turns = totalTurns args
     randIndeces <- mapM (\i -> randomRIO(0,i)) [1..turns]
     res <- exercise (modify randIndeces) turns
     return res
-    -- print =<< exercise modify n
 
--- n: ensemble size (n parallel experiments)
--- turns - turns of game
--- bank - current bank amount
--- part - part of `bank` to gamble
--- accum - history of bank
 simulateGambleIO n turns bank part = replicateM n ( simulateGambleIOsingle turns bank part)
 
 simulateGambleIOsingle turns bank part
@@ -95,8 +94,19 @@ simulateGambleIOgraphic cmdargs = let
 						    let amount = ensemble cmdargs 
 						    raw_data <- replicateM n ( simulateGambleIOgraph cmdargs turns [] 1 )
 						    let data1 = transformLists $ (map fromIntegral [1 .. turns]) : raw_data
-						    putStrLn $ "turns,"  ++ (generateLinesHeader amount)
-						    mapM_ (putStrLn . intercalate ", " . map show) data1
+						    let outfile = output cmdargs
+						    let genOutput = (\outf -> do
+							   outf $ "turns,"  ++ (generateLinesHeader amount)
+							   mapM_ (outf . intercalate ", " . map show) data1
+								   )
+						    case outfile of
+						    	"stdout" -> genOutput putStrLn
+							(filePath) -> do
+							    handle <- openFile filePath WriteMode
+							    genOutput (hPutStrLn handle)
+   							    hClose handle
+
+
 
 
 simulateGambleIOgraph cmdargs turns accum bank 
@@ -127,7 +137,6 @@ main = do
     let gamemode = mode args
     case gamemode of
     	Urn ->    do
-		    dat <- simulateUrnIO args 
-		    print dat
+		    simulateUrnIO args 
 	Gamble -> do
 	            simulateGambleIOgraphic args

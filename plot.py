@@ -1,8 +1,9 @@
+import sys
 import pandas as pd
 import matplotlib.pyplot as plt
 
 # Read the data
-df = pd.read_csv('data.csv')
+df = pd.read_csv(sys.argv[1])
 
 # Basic plot with all lines
 plt.figure(figsize=(10, 6))

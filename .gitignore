@@ -47,4 +47,8 @@ Thumbs.db
 *.flv
 *.mov
 *.wmv
-
+Main
+Main.hi
+Main.o
+*.csv
+*.txt

@@ -14,7 +14,9 @@
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
-        hask = pkgs.ghc.withPackages (p: [p.random p.vector p.cmdargs]);
+	haskl = p: [p.random p.vector p.cmdargs];
+        hask = pkgs.ghc.withPackages (haskl);
+	haskapp = pkgs.writers.writeHaskellBin "simulate" { libraries = haskl pkgs.haskellPackages;} ./Main.hs;
         py = pkgs.python3.withPackages (p: [p.matplotlib p.pandas]);
         visualizer =
           pkgs.writers.writePython3 "visualizer" {
@@ -50,6 +52,10 @@
         apps."vis" = {
           type = "app";
           program = "${visualizer}";
+        };
+        apps."simulate" = {
+          type = "app";
+          program = "${haskapp}/bin/simulate";
         };
         formatter = pkgs.alejandra;
       }

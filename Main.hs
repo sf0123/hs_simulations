@@ -28,12 +28,12 @@ myApp :: MyApp
 myApp = MyApp
     { 
       output = "stdout" &= typ "FILE" &= help "Output file name, or 'stdout'" &= name "output"
-      ,mode = Gamble 
-    , ensemble = 1 &= help "amount of independent simulations" &= name "ensemble" 
-    , totalTurns = 100 &= help "Number of turns" &= name "totalTurns"
-    , bankPart = 1.0 &= help "part of bank to be at stake at each turn" &= name "bankPart" 
-    , onWin = 0.5 &= help "part of stake to add" &= name "onWin" 
-    , onLose = 0.4 &= help "part of stake to subtract" &= name "onLose" 
+      ,mode = Gamble  &= help "Urn | Gamble"
+    , ensemble = 1 &= help "amount of independent simulations"
+    , totalTurns = 100 &= help "Number of turns"
+    , bankPart = 1.0 &= help "part of bank to be at stake at each turn"
+    , onWin = 0.5 &= help "part of stake to add"
+    , onLose = 0.4 &= help "part of stake to subtract"
     } &= summary "simulation for Polya's urn and gambling" &= help "app for simulation of some ergodic and non-ergodic processes  " &= program "simulate"
 
 fracDiv = (/) `on` fromIntegral

@@ -136,19 +136,17 @@ mean xs = fromIntegral (sum xs) / fromIntegral (length xs)
 transformLists ([] : xs) = []
 transformLists xs = (head <$> xs) : transformLists (tail <$> xs)
 
-data_to_csv d total_turns = mapM_ (putStrLn . intercalate ", " . map show) (transformLists $ (fromIntegral <$> [1 .. total_turns]) : d)
-data_header ensemble = "turns," ++ (intercalate ", " ["line" ++ show i | i <- [1 .. ensemble]] )
-
+generateLinesHeader :: Int -> String
+generateLinesHeader n = intercalate ", " ["line" ++ show i | i <- [1 .. n]]
 
 main :: IO ()
 main = do
   args <- cmdArgs myApp
   hPutStrLn stderr $ "Arguments: " ++ show args
-  let turns = totalTurns args
-  let en = ensemble args
   let gamemode = mode args
-  experiment_data <- case gamemode of
-			    Urn -> simulateUrnIO args
-			    Gamble -> simulateGambleIOgraphic args
-  putStrLn $ data_header en
-  print =<< data_to_csv experiment_data turns
+  let experiment_data = case gamemode of
+			    Urn -> do
+			      simulateUrnIO args
+			    Gamble -> do
+			      simulateGambleIOgraphic args
+   print experiment_data

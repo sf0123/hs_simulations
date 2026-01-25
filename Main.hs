@@ -15,7 +15,7 @@ import System.Random (randomRIO)
 data SimMode = Urn | Gamble deriving (Data, Typeable, Show, Eq)
 
 data MyApp = MyApp
-  { output :: FilePath,
+  { output :: String,
     mode :: SimMode,
     ensemble :: Int,
     totalTurns :: Int,
@@ -28,7 +28,7 @@ data MyApp = MyApp
 myApp :: MyApp
 myApp =
   MyApp
-    { output = "stdout" &= typ "FILE" &= help "visualizer app name, or 'stdout'" &= name "output",
+    { output = "stdout" &=  help "visualizer app name, or 'stdout'" &= name "output",
       mode = Gamble &= help "Urn | Gamble",
       ensemble = 1 &= help "amount of independent simulations",
       totalTurns = 100 &= help "Number of turns",
@@ -109,24 +109,6 @@ simulateGambleIOgraph cmdargs turns accum bank
           where
             computeForward = simulateGambleIOgraph cmdargs (turns - 1) (bank : accum)
 
---  gamble:
---         let outfile = output cmdargs
---         let genOutput =
---               ( \outf -> do
---                   outf $ "turns," ++ (generateLinesHeader amount)
---                   mapM_ (outf . intercalate ", " . map show) data1
---               )
---         case outfile of
---           "stdout" -> genOutput putStrLn
---           (filePath) -> do
---             handle <- openFile filePath WriteMode
---             genOutput (hPutStrLn handle)
---             hClose handle
-
--- Urn:
-  -- putStrLn $ "turns," ++ (generateLinesHeader amount)
-  -- mapM_ (putStrLn . intercalate ", " . map show) (transformLists $ (fromIntegral <$> [1 .. turns]) : res)
-
 mean :: [Int] -> Double
 mean xs = fromIntegral (sum xs) / fromIntegral (length xs)
 
@@ -139,6 +121,15 @@ transformLists xs = (head <$> xs) : transformLists (tail <$> xs)
 data_to_csv d total_turns = unlines $ map ( intercalate ", " . map show) (transformLists $ (fromIntegral <$> [1 .. total_turns]) : d)
 data_header ensemble = "turns," ++ (intercalate ", " ["line" ++ show i | i <- [1 .. ensemble]] ) ++ "\n"
 
+startProcessStdin :: String -> IO Handle
+startProcessStdin shellCmd = do
+    (Just stdinHandle, _, _, _) <- createProcess 
+        (shell shellCmd)
+        { std_in = CreatePipe
+        , std_out = Inherit
+        , std_err = Inherit
+        }
+    return stdinHandle
 
 main :: IO ()
 main = do
@@ -150,13 +141,13 @@ main = do
   experiment_data <- case gamemode of
 			    Urn -> simulateUrnIO args
 			    Gamble -> simulateGambleIOgraphic args
+  let res = data_header en ++ data_to_csv experiment_data turns
+  let outfile = output args
+  -- can i refactor this to get write function and call it single time? did not wrapped my head around it yet..
+  case outfile of
+           "stdout" -> putStrLn res -- by default - write ot stdout
+           (shellcmd) -> do
+            	h <- startProcessStdin shellcmd
+		hPutStrLn h res
+                hClose h
 
---         let outfile = output cmdargs
---         case outfile of
---           "stdout" -> genOutput putStrLn
---           (filePath) -> do
---             handle <- openFile filePath WriteMode
---             genOutput (hPutStrLn handle)
---             hClose handle
-  let output = data_header en ++ data_to_csv experiment_data turns
-  putStrLn output

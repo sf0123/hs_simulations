@@ -2,12 +2,8 @@ import sys
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Read the data
-print(sys.argv)
-if len(sys.argv) > 1:
-    src = sys.argv[1]
-else:
-    src = sys.stdin
+src = sys.stdin
+
 df = pd.read_csv(src)
 
 # Basic plot with all lines

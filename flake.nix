@@ -28,7 +28,7 @@
 	'';
       in {
         devShells.default = pkgs.mkShell {
-          buildInputs = [hask pkgs.ghcid pkgs.youplot py ];
+          buildInputs = [hask pkgs.ghcid pkgs.youplot py pkgs.ormolu];
         };
         apps."vis" = {
           type = "app";

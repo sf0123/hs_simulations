@@ -17,6 +17,15 @@
         haskl = p: [p.random p.vector p.cmdargs];
         hask = pkgs.ghc.withPackages haskl;
         myR = pkgs.rWrapper.override {packages = with pkgs.rPackages; [ggplot2 plotly pandoc];};
+        myR_pandoc = pkgs.symlinkJoin {
+          name = "r-with-pandoc";
+          paths = [myR pkgs.pandoc];
+          buildInputs = [pkgs.makeWrapper];
+          postBuild = ''
+            wrapProgram $out/bin/R \
+              --prefix PATH : ${pkgs.lib.makeBinPath [pkgs.pandoc]}
+          '';
+        };
         haskapp = pkgs.writers.writeHaskellBin "simulate" {libraries = haskl pkgs.haskellPackages;} ./Main.hs;
         py = pkgs.python3.withPackages (p: [p.matplotlib p.pandas]);
 
@@ -31,7 +40,7 @@
           ${haskapp}/bin/simulate --output ${visualizer} "$@"
         '';
         rvis = pkgs.writers.writeBash "rvis" ''
-          ${haskapp}/bin/simulate --output "${myR}/bin/Rscript ${./r_visualizer.r}" "$@"
+          ${haskapp}/bin/simulate --output "${myR_pandoc}/bin/Rscript ${./r_visualizer.r}" "$@"
           open interactive_csv_plot.html
         '';
         termvis = pkgs.writers.writeBash "termvis" ''
@@ -39,7 +48,7 @@
         '';
       in {
         devShells.default = pkgs.mkShell {
-          buildInputs = [hask pkgs.ghcid pkgs.youplot py pkgs.ormolu myR pkgs.pandoc];
+          buildInputs = [hask pkgs.ghcid pkgs.youplot py pkgs.ormolu myR_pandoc pkgs.pandoc];
         };
         apps."raw_data" = {
           type = "app";

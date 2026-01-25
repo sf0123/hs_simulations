@@ -31,7 +31,7 @@
           ${haskapp}/bin/simulate --output ${visualizer} "$@"
         '';
         rvis = pkgs.writers.writeBash "rvis" ''
-          ${haskapp}/bin/simulate --output "${myR}/bin/Rscript ${self}/r_visualizer.r" "$@"
+          ${haskapp}/bin/simulate --output "${myR}/bin/Rscript ${./r_visualizer.r}" "$@"
           open interactive_csv_plot.html
         '';
         termvis = pkgs.writers.writeBash "termvis" ''

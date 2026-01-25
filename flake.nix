@@ -14,29 +14,29 @@
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
-	haskl = p: [p.random p.vector p.cmdargs];
-        hask = pkgs.ghc.withPackages (haskl);
-	 myR = pkgs.rWrapper.override { packages = with pkgs.rPackages; [ ggplot2 plotly pandoc ]; };
-	haskapp = pkgs.writers.writeHaskellBin "simulate" { libraries = haskl pkgs.haskellPackages;} ./Main.hs;
+        haskl = p: [p.random p.vector p.cmdargs];
+        hask = pkgs.ghc.withPackages haskl;
+        myR = pkgs.rWrapper.override {packages = with pkgs.rPackages; [ggplot2 plotly pandoc];};
+        haskapp = pkgs.writers.writeHaskellBin "simulate" {libraries = haskl pkgs.haskellPackages;} ./Main.hs;
         py = pkgs.python3.withPackages (p: [p.matplotlib p.pandas]);
 
-	# python code bundled with dependencies to create app to visualize from stdin
+        # python code bundled with dependencies to create app to visualize from stdin
         visualizer =
           pkgs.writers.writePython3 "visualizer" {
             libraries = with pkgs.python3Packages; [matplotlib pandas];
           }
-	  (pkgs.lib.readFile ./plot.py);
-	# convenience - pass by default to python visualizer
-	pyvis = pkgs.writers.writeBash "pyvis" ''
-	    ${haskapp}/bin/simulate --output ${visualizer} "$@" 
-	'';
-	rvis = pkgs.writers.writeBash "rvis" ''
-	    ${haskapp}/bin/simulate --output "${myR}/bin/Rscript ./r_visualizer.r" "$@" 
-	    open interactive_csv_plot.html
-	'';
-	termvis = pkgs.writers.writeBash "termvis" ''
-	    ${haskapp}/bin/simulate --output "${pkgs.youplot}/bin/uplot lines -d," "$@" 
-	'';
+          (pkgs.lib.readFile ./plot.py);
+        # convenience - pass by default to python visualizer
+        pyvis = pkgs.writers.writeBash "pyvis" ''
+          ${haskapp}/bin/simulate --output ${visualizer} "$@"
+        '';
+        rvis = pkgs.writers.writeBash "rvis" ''
+          ${haskapp}/bin/simulate --output "${myR}/bin/Rscript ${self}/r_visualizer.r" "$@"
+          open interactive_csv_plot.html
+        '';
+        termvis = pkgs.writers.writeBash "termvis" ''
+          ${haskapp}/bin/simulate --output "${pkgs.youplot}/bin/uplot lines -d," "$@"
+        '';
       in {
         devShells.default = pkgs.mkShell {
           buildInputs = [hask pkgs.ghcid pkgs.youplot py pkgs.ormolu myR pkgs.pandoc];
@@ -57,7 +57,7 @@
           type = "app";
           program = "${rvis}";
         };
-	
+
         formatter = pkgs.alejandra;
       }
     );

@@ -8,6 +8,7 @@ import qualified Data.Vector.Unboxed as IV
 import qualified Data.Vector.Unboxed.Mutable as V
 import System.Console.CmdArgs
 import System.IO
+import System.Process
 import System.Random
 import System.Random (randomRIO)
 
@@ -27,7 +28,7 @@ data MyApp = MyApp
 myApp :: MyApp
 myApp =
   MyApp
-    { output = "stdout" &= typ "FILE" &= help "Output file name, or 'stdout'" &= name "output",
+    { output = "stdout" &= typ "FILE" &= help "visualizer app name, or 'stdout'" &= name "output",
       mode = Gamble &= help "Urn | Gamble",
       ensemble = 1 &= help "amount of independent simulations",
       totalTurns = 100 &= help "Number of turns",
@@ -89,13 +90,10 @@ simulateGambleIOsingle turns bank part
           | otherwise -> simulateGambleIOsingle (turns - 1) (bank + (bank * part * 0.5)) part
 
 simulateGambleIOgraphic cmdargs =
-  let n = ensemble cmdargs
-      turns = totalTurns cmdargs
-   in do
+  do
         let turns = totalTurns cmdargs
-        let amount = ensemble cmdargs
+        let n = ensemble cmdargs
         replicateM n (simulateGambleIOgraph cmdargs turns [] 1)
-	
 
 simulateGambleIOgraph cmdargs turns accum bank
   | (turns == 0) = return $ reverse (bank : accum)
@@ -136,8 +134,10 @@ mean xs = fromIntegral (sum xs) / fromIntegral (length xs)
 transformLists ([] : xs) = []
 transformLists xs = (head <$> xs) : transformLists (tail <$> xs)
 
-data_to_csv d total_turns = mapM_ (putStrLn . intercalate ", " . map show) (transformLists $ (fromIntegral <$> [1 .. total_turns]) : d)
-data_header ensemble = "turns," ++ (intercalate ", " ["line" ++ show i | i <- [1 .. ensemble]] )
+-- prepend x axis with turn numbers
+-- data_to_csv d total_turns = mapM_ (putStrLn . intercalate ", " . map show) (transformLists $ (fromIntegral <$> [1 .. total_turns]) : d)
+data_to_csv d total_turns = unlines $ map ( intercalate ", " . map show) (transformLists $ (fromIntegral <$> [1 .. total_turns]) : d)
+data_header ensemble = "turns," ++ (intercalate ", " ["line" ++ show i | i <- [1 .. ensemble]] ) ++ "\n"
 
 
 main :: IO ()
@@ -150,5 +150,13 @@ main = do
   experiment_data <- case gamemode of
 			    Urn -> simulateUrnIO args
 			    Gamble -> simulateGambleIOgraphic args
-  putStrLn $ data_header en
-  print =<< data_to_csv experiment_data turns
+
+--         let outfile = output cmdargs
+--         case outfile of
+--           "stdout" -> genOutput putStrLn
+--           (filePath) -> do
+--             handle <- openFile filePath WriteMode
+--             genOutput (hPutStrLn handle)
+--             hClose handle
+  let output = data_header en ++ data_to_csv experiment_data turns
+  putStrLn output

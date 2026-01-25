@@ -39,9 +39,13 @@
         pyvis = pkgs.writers.writeBash "pyvis" ''
           ${haskapp}/bin/simulate --output ${visualizer} "$@"
         '';
+        crossopen =
+          if pkgs.system == "aarch64-darwin"
+          then "open"
+          else "${pkgs.xdg-utils}/bin/xdg-open";
         rvis = pkgs.writers.writeBash "rvis" ''
           ${haskapp}/bin/simulate --output "${myR_pandoc}/bin/Rscript ${./r_visualizer.r}" "$@"
-          open interactive_csv_plot.html
+          ${crossopen} interactive_csv_plot.html
         '';
         termvis = pkgs.writers.writeBash "termvis" ''
           ${haskapp}/bin/simulate --output "${pkgs.youplot}/bin/uplot lines -d," "$@"

@@ -28,7 +28,7 @@ data MyApp = MyApp
 myApp :: MyApp
 myApp =
   MyApp
-    { output = "stdout" &=  help "visualizer app name, or 'stdout'" &= name "output",
+    { output = "stdout" &= help "visualizer app name, or 'stdout'" &= name "output",
       mode = Gamble &= help "Urn | Gamble",
       ensemble = 1 &= help "amount of independent simulations",
       totalTurns = 100 &= help "Number of turns",
@@ -91,9 +91,9 @@ simulateGambleIOsingle turns bank part
 
 simulateGambleIOgraphic cmdargs =
   do
-        let turns = totalTurns cmdargs
-        let n = ensemble cmdargs
-        replicateM n (simulateGambleIOgraph cmdargs turns [] 1)
+    let turns = totalTurns cmdargs
+    let n = ensemble cmdargs
+    replicateM n (simulateGambleIOgraph cmdargs turns [] 1)
 
 simulateGambleIOgraph cmdargs turns accum bank
   | (turns == 0) = return $ reverse (bank : accum)
@@ -118,18 +118,20 @@ transformLists xs = (head <$> xs) : transformLists (tail <$> xs)
 
 -- prepend x axis with turn numbers
 -- data_to_csv d total_turns = mapM_ (putStrLn . intercalate ", " . map show) (transformLists $ (fromIntegral <$> [1 .. total_turns]) : d)
-data_to_csv d total_turns = unlines $ map ( intercalate ", " . map show) (transformLists $ (fromIntegral <$> [1 .. total_turns]) : d)
-data_header ensemble = "turns," ++ (intercalate ", " ["line" ++ show i | i <- [1 .. ensemble]] ) ++ "\n"
+data_to_csv d total_turns = unlines $ map (intercalate ", " . map show) (transformLists $ (fromIntegral <$> [1 .. total_turns]) : d)
 
-startProcessStdin :: String -> IO Handle
+data_header ensemble = "turns," ++ (intercalate ", " ["line" ++ show i | i <- [1 .. ensemble]]) ++ "\n"
+
+startProcessStdin :: String -> IO (ProcessHandle, Handle)
 startProcessStdin shellCmd = do
-    (Just stdinHandle, _, _, _) <- createProcess 
-        (shell shellCmd)
-        { std_in = CreatePipe
-        , std_out = Inherit
-        , std_err = Inherit
+  (Just stdinHandle, _, _, proch) <-
+    createProcess
+      (shell shellCmd)
+        { std_in = CreatePipe,
+          std_out = Inherit,
+          std_err = Inherit
         }
-    return stdinHandle
+  return (proch, stdinHandle)
 
 main :: IO ()
 main = do
@@ -139,15 +141,16 @@ main = do
   let en = ensemble args
   let gamemode = mode args
   experiment_data <- case gamemode of
-			    Urn -> simulateUrnIO args
-			    Gamble -> simulateGambleIOgraphic args
+    Urn -> simulateUrnIO args
+    Gamble -> simulateGambleIOgraphic args
   let res = data_header en ++ data_to_csv experiment_data turns
   let outfile = output args
   -- can i refactor this to get write function and call it single time? did not wrapped my head around it yet..
   case outfile of
-           "stdout" -> putStrLn res -- by default - write ot stdout
-           (shellcmd) -> do
-            	h <- startProcessStdin shellcmd
-		hPutStrLn h res
-                hClose h
-
+    "stdout" -> putStrLn res -- by default - write ot stdout
+    (shellcmd) -> do
+      (p, h) <- startProcessStdin shellcmd
+      hPutStrLn h res
+      hClose h
+      waitForProcess p
+      return ()

@@ -51,4 +51,4 @@ Main
 Main.hi
 Main.o
 *.csv
-*.txt
+*.html

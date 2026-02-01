@@ -1,5 +1,4 @@
 #!/usr/bin/env Rscript
-# plotly_example.R
 
 library(plotly)
 library(scales) 
@@ -8,10 +7,8 @@ data <- read.csv(file("stdin"))
 
 p <- plot_ly()
 
-#line_colors <- c('#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd')
 line_colors <- hue_pal()(ncol(data) - 1)
 
-# Add each line as a trace
 for (i in 2:ncol(data)) {
     p <- p %>% add_trace(
         x = data[[1]],
@@ -115,7 +112,7 @@ p <- p %>% layout(
 )
 
 # Save the plot
-output_file <- "interactive_csv_plot.html"
+output_file <- "csv_plot.html"
 htmlwidgets::saveWidget(p, output_file, 
                        selfcontained = TRUE,
                        title = "CSV Interactive Plot")

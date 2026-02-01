@@ -16,16 +16,20 @@
         pkgs = nixpkgs.legacyPackages.${system};
         haskl = p: [p.random p.vector p.cmdargs];
         hask = pkgs.ghc.withPackages haskl;
-        myR = pkgs.rWrapper.override {packages = with pkgs.rPackages; [ggplot2 plotly pandoc];};
+        add_rpackages = x: x.override {packages = with pkgs.rPackages; [ggplot2 plotly pandoc];};
+
+        # r with r.pandoc package can not work, if 'pandoc' not available on system.
+        # So we add pandoc package into runtime
         myR_pandoc = pkgs.symlinkJoin {
           name = "r-with-pandoc";
-          paths = [myR pkgs.pandoc];
+          paths = [(add_rpackages pkgs.rWrapper)];
           buildInputs = [pkgs.makeWrapper];
           postBuild = ''
             wrapProgram $out/bin/R \
               --prefix PATH : ${pkgs.lib.makeBinPath [pkgs.pandoc]}
           '';
         };
+        myR_utils = add_rpackages pkgs.rstudioWrapper;
         haskapp = pkgs.writers.writeHaskellBin "simulate" {libraries = haskl pkgs.haskellPackages;} ./Main.hs;
         py = pkgs.python3.withPackages (p: [p.matplotlib p.pandas]);
 
@@ -52,7 +56,7 @@
         '';
       in {
         devShells.default = pkgs.mkShell {
-          buildInputs = [hask pkgs.ghcid pkgs.youplot py pkgs.ormolu myR_pandoc pkgs.pandoc];
+          buildInputs = [hask pkgs.ghcid pkgs.youplot py pkgs.ormolu myR_utils];
         };
         apps."raw_data" = {
           type = "app";

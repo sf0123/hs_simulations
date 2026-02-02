@@ -54,9 +54,16 @@
         termvis = pkgs.writers.writeBash "termvis" ''
           ${haskapp}/bin/simulate --output "${pkgs.youplot}/bin/uplot lines -d," "$@"
         '';
+        termvis_histogram = pkgs.writers.writeBash "termvis_histogram" ''
+          ${haskapp}/bin/simulate --output "${pkgs.gawk}/bin/awk '{print \''$2}' | ${pkgs.youplot}/bin/uplot hist --nbins 100" "$@"
+        '';
+        rvis_histogram = pkgs.writers.writeBash "rvis_histogram" ''
+          ${haskapp}/bin/simulate --output "${myR_pandoc}/bin/Rscript ${./probability_density.r}" "$@"
+          ${crossopen} densities.html
+        '';
       in {
         devShells.default = pkgs.mkShell {
-          buildInputs = [hask pkgs.ghcid pkgs.youplot py pkgs.ormolu myR_utils];
+          buildInputs = [hask pkgs.ghcid pkgs.youplot py pkgs.ormolu myR_utils myR_pandoc];
         };
         apps."raw_data" = {
           type = "app";
@@ -70,9 +77,17 @@
           type = "app";
           program = "${termvis}";
         };
+        apps."termvis_histogram" = {
+          type = "app";
+          program = "${termvis_histogram}";
+        };
         apps."rvis" = {
           type = "app";
           program = "${rvis}";
+        };
+        apps."rvis_histogram" = {
+          type = "app";
+          program = "${rvis_histogram}";
         };
 
         formatter = pkgs.alejandra;

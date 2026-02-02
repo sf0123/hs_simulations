@@ -12,7 +12,7 @@ import System.Process
 import System.Random
 import System.Random (randomRIO)
 
-data SimMode = Urn | Gamble deriving (Data, Typeable, Show, Eq)
+data SimMode = Urn | Gamble | RandVar deriving (Data, Typeable, Show, Eq)
 
 data MyApp = MyApp
   { output :: String,
@@ -29,8 +29,8 @@ myApp :: MyApp
 myApp =
   MyApp
     { output = "stdout" &= help "visualizer app name, or 'stdout'" &= name "output",
-      mode = Gamble &= help "Urn | Gamble",
-      ensemble = 1 &= help "amount of independent simulations",
+      mode = Gamble &= help "Urn | Gamble | RandVar ",
+      ensemble = 5 &= help "amount of independent simulations",
       totalTurns = 100 &= help "Number of turns",
       bankPart = 1.0 &= help "part of bank to be at stake at each turn",
       onWin = 0.5 &= help "part of stake to add",
@@ -110,6 +110,15 @@ simulateGambleIOgraph cmdargs turns accum bank
           where
             computeForward = simulateGambleIOgraph cmdargs (turns - 1) (bank : accum)
 
+simulateRandomVar args = do
+	let amount = ensemble args
+	replicateM amount $  simulateRandomVar' args
+simulateRandomVar' args = do
+		let n = totalTurns args
+		ret <- replicateM n $ randomRIO (0, 1000) ::IO [Int] -- todo - get from args?
+		return $ fromIntegral <$> ret
+
+simulateRandomVarAverage = undefined
 -- ex [[1,2,3], [4,5,6]] -> [[1,4], [2,5], [3,6]]
 repackLists ([] : xs) = []
 repackLists xs = (head <$> xs) : repackLists (tail <$> xs)
@@ -123,8 +132,6 @@ addMean [] = []
 addMean ar@(l : ls) = if llen > 1 then addMean_ ar llen else ar
   where
     llen = length l
-
--- addMean = id
 
 double_l tt = fromIntegral <$> [1 .. tt]
 
@@ -169,6 +176,7 @@ main = do
   experiment_data <- case gamemode of
     Urn -> simulateUrnIO args
     Gamble -> simulateGambleIOgraphic args
+    RandVar -> simulateRandomVar args
   let res = data_header en ++ data_to_csv turns experiment_data
   let outfile = output args
   -- can i refactor this to get write function and call it single time? did not wrapped my head around it yet..

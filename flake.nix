@@ -16,7 +16,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
         haskl = p: [p.random p.vector p.cmdargs];
         hask = pkgs.ghc.withPackages haskl;
-        add_rpackages = x: x.override {packages = with pkgs.rPackages; [ggplot2 plotly pandoc];};
+        add_rpackages = x: x.override {packages = with pkgs.rPackages; [ggplot2 plotly pandoc tidyverse];};
 
         # r with r.pandoc package can not work, if 'pandoc' not available on system.
         # So we add pandoc package into runtime
@@ -49,7 +49,7 @@
           else "${pkgs.xdg-utils}/bin/xdg-open";
         rvis = pkgs.writers.writeBash "rvis" ''
           ${haskapp}/bin/simulate --output "${myR_pandoc}/bin/Rscript ${./r_visualizer.r}" "$@"
-          ${crossopen} interactive_csv_plot.html
+          ${crossopen} csv_plot.html
         '';
         termvis = pkgs.writers.writeBash "termvis" ''
           ${haskapp}/bin/simulate --output "${pkgs.youplot}/bin/uplot lines -d," "$@"

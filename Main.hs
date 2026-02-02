@@ -42,19 +42,20 @@ myApp =
 
 fracDiv = (/) `on` fromIntegral
 
-modify indeces v i n
-  | i == n = return v
+modify [] vec _ _ = return vec
+modify (cur_index : rest) vec total i
+  | i == total = return vec
   | otherwise = do
-      sample <- V.read v (head indeces)
-      V.write v i sample
-      modify (tail indeces) v (i + 1) n
+      sample <- V.read vec cur_index
+      V.write vec i sample
+      modify rest vec total (i + 1)
 
 -- poya's urn
 exercise mod n = do
   vector <- V.replicate n (0 :: Int)
   V.write vector 0 1
   V.write vector 1 2
-  mod vector 2 n
+  mod vector n 2
   ivector <- freeze vector
   return $ IV.toList ivector
 
@@ -109,18 +110,43 @@ simulateGambleIOgraph cmdargs turns accum bank
           where
             computeForward = simulateGambleIOgraph cmdargs (turns - 1) (bank : accum)
 
-mean :: [Int] -> Double
-mean xs = fromIntegral (sum xs) / fromIntegral (length xs)
+-- ex [[1,2,3], [4,5,6]] -> [[1,4], [2,5], [3,6]]
+repackLists ([] : xs) = []
+repackLists xs = (head <$> xs) : repackLists (tail <$> xs)
 
--- takes list of N sequences of L length, transforms to list of L lists with N elems (zips)
-transformLists ([] : xs) = []
-transformLists xs = (head <$> xs) : transformLists (tail <$> xs)
+-- addMean_ :: Fractional  a => [[a]] -> Int -> [[a]]
+addMean_ [] llen = []
+addMean_ (l : ls) llen = (sum (l) / (fromIntegral llen) : l) : addMean_ ls llen
+
+-- add mean only for data with > 1 sample
+addMean [] = []
+addMean ar@(l : ls) = if llen > 1 then addMean_ ar llen else ar
+  where
+    llen = length l
+
+-- addMean = id
+
+double_l tt = fromIntegral <$> [1 .. tt]
+
+preprend what ([]) = []
+preprend [] to = to
+preprend (c : cs) (to : tos) = (c : to) : preprend cs tos
+
+enumerate_with tt = preprend (double_l tt)
+
+show_with_comma = intercalate ", " . map show
 
 -- prepend x axis with turn numbers
--- data_to_csv d total_turns = mapM_ (putStrLn . intercalate ", " . map show) (transformLists $ (fromIntegral <$> [1 .. total_turns]) : d)
-data_to_csv d total_turns = unlines $ map (intercalate ", " . map show) (transformLists $ (fromIntegral <$> [1 .. total_turns]) : d)
+data_to_csv total_turns =
+  unlines
+    . map show_with_comma
+    . enumerate_with total_turns
+    . addMean
+    . repackLists
 
-data_header ensemble = "turns," ++ (intercalate ", " ["line" ++ show i | i <- [1 .. ensemble]]) ++ "\n"
+data_header ensemble = "turns," ++ mean_ ++ (intercalate ", " ["line" ++ show i | i <- [1 .. ensemble]]) ++ "\n"
+  where
+    mean_ = if ensemble == 1 then "" else "mean,"
 
 startProcessStdin :: String -> IO (ProcessHandle, Handle)
 startProcessStdin shellCmd = do
@@ -143,7 +169,7 @@ main = do
   experiment_data <- case gamemode of
     Urn -> simulateUrnIO args
     Gamble -> simulateGambleIOgraphic args
-  let res = data_header en ++ data_to_csv experiment_data turns
+  let res = data_header en ++ data_to_csv turns experiment_data
   let outfile = output args
   -- can i refactor this to get write function and call it single time? did not wrapped my head around it yet..
   case outfile of

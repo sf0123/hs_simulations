@@ -3,6 +3,9 @@ import Control.Monad.ST
 import Control.Monad.State (get, put, runState)
 import Data.Function
 import Data.List (intercalate, zip)
+import Data.Random.Distribution.Bernoulli
+import Data.Random.Distribution.Uniform
+import Data.Random.RVar
 import Data.STRef
 import Data.Vector.Unboxed (freeze)
 import qualified Data.Vector.Unboxed as IV
@@ -11,9 +14,9 @@ import System.Console.CmdArgs
 import System.IO
 import System.Process
 import System.Random (RandomGen, StdGen, mkStdGen, randomR, randomRIO)
-import System.Random.Stateful (StateGenM, genRange, randomM, randomRM, runStateGen_)
+import System.Random.Stateful (RandomGenM, StateGenM, genRange, randomM, randomRM, runStateGen_)
 
-data SimMode = Urn | Gamble | RandVar deriving (Data, Typeable, Show, Eq)
+data SimMode = Urn | Gamble | Uni | Bern deriving (Data, Typeable, Show, Eq)
 
 data MyApp = MyApp
   { output :: String,
@@ -23,6 +26,7 @@ data MyApp = MyApp
     bankPart :: Double,
     onWin :: Double,
     onLose :: Double,
+    winProb :: Double,
     seed :: Int
   }
   deriving (Data, Typeable, Show, Eq)
@@ -31,11 +35,12 @@ myApp :: MyApp
 myApp =
   MyApp
     { output = "stdout" &= help "visualizer app name, or 'stdout'" &= name "output",
-      mode = Gamble &= help "Urn | Gamble | RandVar ",
+      mode = Gamble &= help "Urn | Gamble | Uni | Bern",
       ensemble = 4 &= help "amount of independent simulations",
       totalTurns = 15 &= help "Number of turns",
       bankPart = 1.0 &= help "part of bank to be at stake at each turn",
       onWin = 0.5 &= help "part of stake to add",
+      winProb = 0.5 &= help "probability to win on single turn",
       onLose = 0.4 &= help "part of stake to subtract",
       seed = 0 &= help "integer as seed"
     }
@@ -80,30 +85,32 @@ genvec n indeces = runST $ do
   urnStep indeces v n 2
   IV.toList <$> freeze v
 
-simulateUrnOnce r n = do
-  indeces <- genDistr r n
+simulateUrnOnce n = do
+  indeces <- genDistr n
   return $ modifyToDistr $ (genvec n indeces :: [Int])
 
-simulateUrnN :: StdGen -> MyApp -> [[Double]]
-simulateUrnN rnd args =
+-- simulateUrnN :: RandomGenM g r m =>g -> Int -> m [[Double]]
+simulateUrnN args =
   let amount = ensemble args
       t = totalTurns args
-   in runStateGen_ rnd (\r -> replicateM amount $ (simulateUrnOnce r t))
+   in (replicateM amount $ (simulateUrnOnce t))
 
-genDistr r t = (fmap fromIntegral) <$> (mapM (\i -> randomRM (0, i) r) [1 .. t])
+-- genDistr r t = (fmap fromIntegral) <$> (mapM (\i -> randomRM (0, i) r) [1 .. t])
+genDistr t = (fmap fromIntegral) <$> (mapM $ uniform 0) [1 .. t]
 
-simulateGambleN :: (RandomGen r) => r -> MyApp -> [[Double]]
-simulateGambleN rnd cmdargs =
+-- simulateGambleN :: (RandomGen r) => r -> MyApp -> [[Double]]
+simulateGambleN cmdargs =
   let turns = totalTurns cmdargs
       n = ensemble cmdargs
-   in runStateGen_ rnd $ (\rstate -> replicateM n $ simulateGambleOnce rstate cmdargs turns [] 1)
+   in (replicateM n $ simulateGambleOnce cmdargs turns [] 1)
 
 requireInt :: Int -> Int
 requireInt = id
 
-simulateGambleOnce rnd cmdargs 0 accum bank = return $ (reverse (bank : accum))
-simulateGambleOnce rnd cmdargs turns accum bank = do
-  coin' <- randomRM (0, 1) rnd
+simulateGambleOnce cmdargs 0 accum bank = return $ (reverse (bank : accum))
+simulateGambleOnce cmdargs turns accum bank = do
+  let p = winProb cmdargs
+  coin' <- bernoulli p
   let coin = coin' :: Int
   let onwin = onWin cmdargs
   let onlose = onLose cmdargs
@@ -111,17 +118,19 @@ simulateGambleOnce rnd cmdargs turns accum bank = do
   let new_bank = case coin of
         0 -> bank - (bank * part * onlose)
         otherwise -> bank + (bank * part * onwin)
-  simulateGambleOnce rnd cmdargs (turns - 1) (bank : accum) new_bank
+  simulateGambleOnce cmdargs (turns - 1) (bank : accum) new_bank
 
-simulateRandomVarN rnd args = runStateGen_ rnd $ \rstate ->
-  replicateM
-    (ensemble args)
-    (simulateRandomVarOnce rstate args)
+simulateBernoullyRandomVarN args =
+  let p = winProb args
+   in simulateRandomVarN (bernoulli p) args
 
-simulateRandomVarOnce rstate args =
-  let n = totalTurns args
+simulateUniRandomVarN = simulateRandomVarN $ uniform 0 1000
+
+simulateRandomVarN distr args =
+  let ens = (ensemble args)
+      n = totalTurns args
       arrToDouble = fmap $ fromIntegral . requireInt
-   in arrToDouble <$> (replicateM n $ randomRM (0, 1000) rstate)
+   in replicateM ens (arrToDouble <$> (replicateM n distr))
 
 -- ex [[1,2,3], [4,5,6]] -> [[1,4], [2,5], [3,6]]
 repackLists ([] : xs) = []
@@ -189,10 +198,13 @@ main = do
   let turns = totalTurns args
   let en = ensemble args
   let gamemode = mode args
-  let experiment_data = case gamemode of
-        Urn -> simulateUrnN rnd args
-        Gamble -> simulateGambleN rnd args
-        RandVar -> simulateRandomVarN rnd args
+  -- runStateGen_ rnd
+  let sim = case gamemode of
+        Urn -> simulateUrnN args
+        Gamble -> simulateGambleN args
+        Uni -> simulateUniRandomVarN args
+        Bern -> simulateBernoullyRandomVarN args
+  let experiment_data = runStateGen_ rnd $ runRVar sim
   let res = data_header en ++ data_to_csv turns experiment_data
   let outfile = output args
   case outfile of

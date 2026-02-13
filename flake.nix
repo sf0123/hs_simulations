@@ -14,7 +14,7 @@
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
-        haskl = p: [p.random p.vector p.cmdargs];
+        haskl = p: [p.random p.vector p.cmdargs p.diagrams p.random-fu];
         hask = pkgs.ghc.withPackages haskl;
         add_rpackages = x: x.override {packages = with pkgs.rPackages; [ggplot2 plotly pandoc tidyverse];};
 
@@ -63,7 +63,7 @@
         '';
       in {
         devShells.default = pkgs.mkShell {
-          buildInputs = [hask pkgs.ghcid pkgs.youplot py pkgs.ormolu myR_utils myR_pandoc];
+          buildInputs = [hask pkgs.ghcid pkgs.youplot py pkgs.ormolu myR_utils myR_pandoc pkgs.haskell-language-server ];
         };
         apps."raw_data" = {
           type = "app";
